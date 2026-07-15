@@ -7,9 +7,9 @@ import json
 import os
 
 from .database import engine, get_db
-from .import models
-import schemas
-import auth
+from . import models
+from . import schemas
+from . import auth
 import ai_service
 
 # Create tables
