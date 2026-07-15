@@ -1,7 +1,7 @@
-from .fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Header
-from .fastapi.middleware.cors import CORSMiddleware
-from .sqlalchemy.orm import Session
-from .typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Header
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Optional
 import datetime
 import json
 import os
