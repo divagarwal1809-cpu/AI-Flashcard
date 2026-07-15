@@ -10,7 +10,7 @@ from .database import engine, get_db
 from . import models
 from . import schemas
 from . import auth
-import ai_service
+from . import ai_service
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
