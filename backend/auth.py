@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import os
 import hashlib
 
-from database import get_db
+from .database import get_db
 import models
 
 SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_flashmind_ai_key_change_me_in_production")
