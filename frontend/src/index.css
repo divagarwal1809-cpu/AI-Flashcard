@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+
+@theme {
+  --color-cream: #FFFDF5;
+  --color-primary: #FFD93D;
+  --color-secondary: #FF6B6B;
+  --color-accent: #C4B5FD;
+  --color-success: #4ADE80;
+  --color-ink: #000000;
+
+  --shadow-neo: 4px 4px 0px 0px #000000;
+  --shadow-neo-lg: 8px 8px 0px 0px #000000;
+  --shadow-neo-sm: 2px 2px 0px 0px #000000;
+
+  --border-width-3: 3px;
+  --border-width-4: 4px;
+
+  --font-sans: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+@utility neo-border {
+  border: 3px solid var(--border);
+}
+
+@utility neo-border-lg {
+  border: 4px solid var(--border);
+}
+
+@utility neo-btn {
+  border: 3px solid var(--border);
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 4px 4px 0px 0px var(--shadow);
+}
+.neo-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+
+@utility neo-btn-primary {
+  @apply neo-btn bg-primary hover:bg-yellow-400;
+}
+
+@utility neo-btn-secondary {
+  @apply neo-btn bg-accent hover:bg-violet-400;
+}
+
+@utility neo-btn-destructive {
+  @apply neo-btn bg-secondary text-white hover:bg-red-500;
+}
+
+@utility neo-card {
+  border: 3px solid var(--border);
+  background-color: var(--surface);
+  color: var(--ink);
+  padding: 1.5rem;
+  transition: all 0.15s;
+  box-shadow: 4px 4px 0px 0px var(--shadow);
+}
+
+@utility neo-input {
+  border: 3px solid var(--border);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  background-color: var(--surface);
+  color: var(--ink);
+  box-shadow: 2px 2px 0px 0px var(--shadow);
+}
+.neo-input:focus { outline: none; ring: 2px solid var(--border); background-color: var(--surface-focus); }
+
+/* Card flip animation */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+body {
+  @apply bg-cream text-ink font-sans antialiased selection:bg-primary;
+  background-color: #FFFDF5;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Animations ──────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-2deg); }
+  50%      { transform: rotate(2deg); }
+}
+
+@keyframes pulse-neo {
+  0%, 100% { box-shadow: 4px 4px 0px 0px var(--shadow); }
+  50%      { box-shadow: 6px 6px 0px 0px var(--shadow); }
+}
+
+@keyframes bounce-in {
+  0%   { transform: scale(0.85); opacity: 0; }
+  70%  { transform: scale(1.05); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+.animate-fade-in      { animation: fade-in 0.4s ease both; }
+.animate-slide-up     { animation: slide-up 0.45s ease both; }
+.animate-slide-right  { animation: slide-in-right 0.4s ease both; }
+.animate-wiggle       { animation: wiggle 0.5s ease-in-out; }
+.animate-pulse-neo    { animation: pulse-neo 1.5s ease-in-out infinite; }
+.animate-bounce-in    { animation: bounce-in 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+
+/* stagger helpers */
+.delay-75  { animation-delay: 75ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-225 { animation-delay: 225ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* ── CSS Variables (light / dark) ─────────────────────── */
+:root {
+  --bg:            #FFFDF5;
+  --surface:       #ffffff;
+  --surface-focus: #fffde8;
+  --ink:           #000000;
+  --ink-sub:       #444444;
+  --border:        #000000;
+  --shadow:        #000000;
+}
+
+.dark {
+  --bg:            #0f0f0f;
+  --surface:       #1c1c1c;
+  --surface-focus: #252525;
+  --ink:           #f0efe8;
+  --ink-sub:       #999999;
+  --border:        #e8e7e0;
+  --shadow:        #e8e7e0;
+}
+
+/* Apply variables to root elements */
+body { background-color: var(--bg); color: var(--ink); }
+
+/* nav dark bg — nav uses inline bg-white class */
+.dark nav { background-color: #111 !important; border-color: var(--border) !important; }
+
+/* Inline Tailwind colour classes that bypass the utility system */
+.dark .bg-white   { background-color: var(--surface) !important; }
+.dark .bg-cream   { background-color: var(--bg)      !important; }
+.dark .bg-yellow-100 { background-color: #2d2500 !important; }
+.dark .bg-yellow-50  { background-color: #1e1900 !important; }
+.dark .bg-gray-100   { background-color: #2a2a2a !important; }
+.dark .text-black    { color: var(--ink) !important; }
+.dark .text-gray-600 { color: var(--ink-sub) !important; }
+.dark .text-gray-700 { color: var(--ink-sub) !important; }
+.dark .text-gray-500 { color: var(--ink-sub) !important; }
+.dark .text-gray-800 { color: var(--ink-sub) !important; }
+.dark .border-black  { border-color: var(--border) !important; }
+.dark .border-t-2    { border-color: var(--border) !important; }
+
+/* theme-toggle button */
+.theme-toggle {
+  border: 3px solid var(--border);
+  padding: 0.375rem 0.75rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 2px 2px 0px 0px var(--shadow);
+  background: var(--surface);
+  color: var(--ink);
+}
+.theme-toggle:hover { opacity: 0.8; }
+
+/* text-ink */
+.dark .text-ink { color: var(--ink) !important; }
+.dark .text-black { color: var(--ink) !important; }
+
+/* theme-toggle button itself */
+.theme-toggle {
+  @apply neo-border px-3 py-1.5 font-bold text-sm cursor-pointer transition-all;
+  box-shadow: 2px 2px 0px 0px var(--shadow);
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+.theme-toggle:hover { opacity: 0.85; }
