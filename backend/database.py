@@ -8,13 +8,13 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgres://",
-        "postgresql+psycopg2://",
+        "postgresql+psycopg://",
         1
     )
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace(
         "postgresql://",
-        "postgresql+psycopg2://",
+        "postgresql+psycopg://",
         1
     )
 
