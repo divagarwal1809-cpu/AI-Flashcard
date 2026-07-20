@@ -8,11 +8,10 @@ An AI-powered flashcard generator that transforms your study notes or text into 
 
 ## Features
 
--  AI-generated flashcards from any text
+-  AI-generated flashcards from any text, document, link
 -  Automatic question and answer generation
--  Fast and responsive interface
--  Mobile-friendly design
--  Clean and modern UI
+-  Responsive interface
+-  Add your own Gemini API key
 -  Flip flashcards for active recall
 -  Generate multiple flashcards in one click
 
@@ -28,7 +27,7 @@ An AI-powered flashcard generator that transforms your study notes or text into 
 - TypeScript
 - Python
 
-### AI
+### API Key
 - Google Gemini API
 
 ### Deployment
