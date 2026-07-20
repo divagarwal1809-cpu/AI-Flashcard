@@ -35,8 +35,10 @@ export const Settings: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const statsData = await api.get<Stats>("/stats");
-      const foldersData = await api.get<Folder[]>("/folders");
+      const [statsData, foldersData] = await Promise.all([
+        api.get<Stats>("/stats"),
+        api.get<Folder[]>("/folders")
+      ]);
       setStats(statsData);
       setFolders(foldersData);
       setApiKey(api.getApiKey());
@@ -67,10 +69,8 @@ export const Settings: React.FC = () => {
 
     try {
       const parsed = JSON.parse(importJson);
-      
-      // Simple schema check
       if (!parsed.deck_name || !Array.isArray(parsed.cards)) {
-        throw new Error("Invalid format. Must contain 'deck_name' (string) and 'cards' (array of {front, back}).");
+        throw new Error("Invalid format. Must contain 'deck_name' (string) and 'cards' (array).");
       }
 
       const url = `/decks/import${importFolderId ? `?folder_id=${importFolderId}` : ""}`;
@@ -88,70 +88,71 @@ export const Settings: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-12 font-bold text-lg">LOADING SETTINGS...</div>;
+    return <div className="text-center py-12 text-sm text-[#64748B]">Loading settings...</div>;
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-12 space-y-8">
-      <h2 className="text-3xl font-black mb-6 tracking-tight flex items-center gap-2">
-        <Database size={28} /> STATS & CONFIGURATIONS
-      </h2>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Workspace Settings</h1>
+        <p className="text-sm text-[#64748B] mt-0.5">Manage study stats, API integrations, and import/export configurations.</p>
+      </div>
 
       {/* Stats Cards Row */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white neo-card p-4 text-center">
-            <span className="block text-gray-500 font-bold text-xs uppercase tracking-wider">Decks</span>
-            <span className="text-3xl font-black">{stats.total_decks}</span>
+          <div className="card !p-5">
+            <span className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">Decks</span>
+            <span className="text-2xl font-bold text-[#0F172A]">{stats.total_decks}</span>
           </div>
-          <div className="bg-white neo-card p-4 text-center">
-            <span className="block text-gray-500 font-bold text-xs uppercase tracking-wider">Total Cards</span>
-            <span className="text-3xl font-black">{stats.total_cards}</span>
+          <div className="card !p-5">
+            <span className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">Total Cards</span>
+            <span className="text-2xl font-bold text-[#0F172A]">{stats.total_cards}</span>
           </div>
-          <div className="bg-white neo-card p-4 text-center">
-            <span className="block text-gray-500 font-bold text-xs uppercase tracking-wider">Due Review</span>
-            <span className="text-3xl font-black text-secondary">{stats.due_cards}</span>
+          <div className="card !p-5">
+            <span className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">Due Review</span>
+            <span className="text-2xl font-bold text-amber-600">{stats.due_cards}</span>
           </div>
-          <div className="bg-white neo-card p-4 text-center">
-            <span className="block text-gray-500 font-bold text-xs uppercase tracking-wider">Sessions</span>
-            <span className="text-3xl font-black text-accent-primary">{stats.total_sessions}</span>
+          <div className="card !p-5">
+            <span className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">Sessions</span>
+            <span className="text-2xl font-bold text-[#7C3AED]">{stats.total_sessions}</span>
           </div>
         </div>
       )}
 
       {/* Main Settings Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Side: Stats & Key */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           {/* Detailed Study Stats */}
-          <div className="bg-white neo-card shadow-neo p-6 space-y-4">
-            <h3 className="text-xl font-black border-b-2 border-black pb-2 flex items-center gap-2">
-              <BarChart3 size={18} /> STUDY PERFORMANCE
+          <div className="card">
+            <h3 className="font-semibold text-[#0F172A] border-b border-[#EFE7FC] pb-3 mb-4 flex items-center gap-2 text-sm">
+              <BarChart3 size={16} className="text-[#7C3AED]" /> Study Performance
             </h3>
             {stats && (
               <div className="space-y-3">
-                <div className="flex justify-between font-bold text-sm">
-                  <span className="text-gray-600">Total Cards Studied:</span>
-                  <span>{stats.cards_studied}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Total Cards Studied:</span>
+                  <span className="font-semibold text-[#0F172A]">{stats.cards_studied}</span>
                 </div>
-                <div className="flex justify-between font-bold text-sm">
-                  <span className="text-gray-600">Average Session Accuracy:</span>
-                  <span>{Math.round(stats.average_accuracy)}%</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Average Session Accuracy:</span>
+                  <span className="font-semibold text-[#0F172A]">{Math.round(stats.average_accuracy)}%</span>
                 </div>
-                <div className="flex justify-between font-bold text-sm">
-                  <span className="text-gray-600">Organized Folders:</span>
-                  <span>{stats.total_folders}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Organized Folders:</span>
+                  <span className="font-semibold text-[#0F172A]">{stats.total_folders}</span>
                 </div>
               </div>
             )}
           </div>
 
           {/* API Key Panel */}
-          <div className="bg-white neo-card shadow-neo p-6 space-y-4">
-            <h3 className="text-xl font-black border-b-2 border-black pb-2 flex items-center gap-2">
-              <Key size={18} /> GEMINI API OVERRIDE
+          <div className="card">
+            <h3 className="font-semibold text-[#0F172A] border-b border-[#EFE7FC] pb-3 mb-3 flex items-center gap-2 text-sm">
+              <Key size={16} className="text-[#7C3AED]" /> Gemini API Override
             </h3>
-            <p className="text-xs font-semibold text-gray-600">
+            <p className="text-xs text-[#64748B] mb-4 leading-relaxed">
               Provide your own Google Gemini API key to override the server configuration. The key is stored locally in your browser storage.
             </p>
 
@@ -161,16 +162,16 @@ export const Settings: React.FC = () => {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="AIzaSy..."
-                className="w-full neo-input text-xs"
+                className="input"
               />
-              <button type="submit" className="neo-btn-primary py-2 px-4 text-xs flex items-center gap-1.5">
+              <button type="submit" className="btn-primary w-full justify-center text-xs">
                 {keySaved ? (
                   <>
-                    <CheckCircle size={14} /> SAVED!
+                    <CheckCircle size={14} /> Saved!
                   </>
                 ) : (
                   <>
-                    <Save size={14} /> SAVE KEY
+                    <Save size={14} /> Save Key
                   </>
                 )}
               </button>
@@ -179,61 +180,58 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* Right Side: Import Deck */}
-        <div className="bg-white neo-card shadow-neo p-6 space-y-4">
-          <h3 className="text-xl font-black border-b-2 border-black pb-2 flex items-center gap-2">
-            <Database size={18} /> IMPORT STUDY DECK
-          </h3>
-          <p className="text-xs font-semibold text-gray-600">
-            Paste a JSON string matching the export schema to import an entire flashcard deck.
-          </p>
+        <div className="card flex flex-col justify-between">
+          <div>
+            <h3 className="font-semibold text-[#0F172A] border-b border-[#EFE7FC] pb-3 mb-3 flex items-center gap-2 text-sm">
+              <Database size={16} className="text-[#7C3AED]" /> Import Study Deck
+            </h3>
+            <p className="text-xs text-[#64748B] mb-4 leading-relaxed">
+              Paste a JSON string matching the export schema to import an entire flashcard deck.
+            </p>
 
-          {importSuccess && (
-            <div className="bg-success/20 neo-border p-3 font-bold text-xs text-green-800">
-              {importSuccess}
-            </div>
-          )}
-          {importError && (
-            <div className="bg-secondary text-white p-3 neo-border font-bold text-xs">
-              {importError}
-            </div>
-          )}
+            {importSuccess && (
+              <div className="bg-[#F0FDF9] border border-green-200 text-[#059669] text-xs px-3 py-2 rounded-lg mb-4">
+                {importSuccess}
+              </div>
+            )}
+            {importError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-lg mb-4">
+                {importError}
+              </div>
+            )}
 
-          <form onSubmit={handleImport} className="space-y-4">
-            <div>
-              <label className="block font-bold text-xs uppercase mb-1">Assign to Folder</label>
-              <select
-                value={importFolderId || ""}
-                onChange={(e) => setImportFolderId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full neo-input text-xs"
-              >
-                <option value="">No Folder (Unassigned)</option>
-                {folders.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block font-bold text-xs uppercase mb-1">JSON Content</label>
-              <textarea
-                value={importJson}
-                onChange={(e) => setImportJson(e.target.value)}
-                rows={6}
-                placeholder={`{
-  "deck_name": "My Biology Deck",
-  "cards": [
-    { "front": "Define ATP", "back": "Adenosine Triphosphate..." }
-  ]
-}`}
-                className="w-full neo-input text-xs font-mono"
-                required
-              />
-            </div>
+            <form onSubmit={handleImport} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#64748B] mb-1">Assign to Folder</label>
+                <select
+                  value={importFolderId || ""}
+                  onChange={(e) => setImportFolderId(e.target.value ? Number(e.target.value) : null)}
+                  className="input"
+                >
+                  <option value="">No Folder (Unassigned)</option>
+                  {folders.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-[#64748B] mb-1">JSON Content</label>
+                <textarea
+                  value={importJson}
+                  onChange={(e) => setImportJson(e.target.value)}
+                  rows={5}
+                  placeholder={`{\n  "deck_name": "Biology Deck",\n  "cards": [\n    { "front": "Define ATP", "back": "Adenosine Triphosphate..." }\n  ]\n}`}
+                  className="input font-mono text-xs"
+                  required
+                />
+              </div>
 
-            <button type="submit" className="neo-btn-secondary py-2.5 px-5 text-xs flex items-center gap-1.5 text-ink">
-              <Upload size={14} /> IMPORT DECK
-            </button>
-          </form>
+              <button type="submit" className="btn-secondary w-full justify-center text-xs">
+                <Upload size={14} /> Import Deck
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

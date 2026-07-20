@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../utils/api";
-import { Folder, Plus, Search, Trash2, Zap, FileText, Globe, FileUp, Info } from "lucide-react";
+import { Folder, Plus, Search, Trash2, Zap, FileText, Globe, FileUp, X, ChevronRight } from "lucide-react";
 
 interface Deck {
   id: number;
@@ -12,34 +12,24 @@ interface Deck {
   created_at: string;
 }
 
-interface FolderData {
-  id: number;
-  name: string;
-  created_at: string;
-}
+interface FolderData { id: number; name: string; created_at: string; }
 
-interface DashboardProps {
-  onSelectDeck: (deckId: number) => void;
-}
-
-export const Dashboard: React.FC<DashboardProps> = ({ onSelectDeck }) => {
+export function Dashboard({ onSelectDeck }: { onSelectDeck: (id: number) => void }) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Folder & Deck creation
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [showDeckModal, setShowDeckModal] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckFolderId, setNewDeckFolderId] = useState<number | null>(null);
 
-  // AI Generator states
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiDeckName, setAiDeckName] = useState("");
-  const [aiFolderId, setAiFolderId] = useState<string>("");
+  const [aiFolderId, setAiFolderId] = useState("");
   const [aiSourceType, setAiSourceType] = useState<"text" | "url" | "file">("text");
   const [aiTextContent, setAiTextContent] = useState("");
   const [aiUrl, setAiUrl] = useState("");
@@ -51,233 +41,150 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDeck }) => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const decksData = await api.get<Deck[]>("/decks");
-      const foldersData = await api.get<FolderData[]>("/folders");
+      const [decksData, foldersData] = await Promise.all([
+        api.get<Deck[]>("/decks"),
+        api.get<FolderData[]>("/folders"),
+      ]);
       setDecks(decksData);
       setFolders(foldersData);
-    } catch (err) {
-      console.error("Error loading dashboard data", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
-    try {
-      await api.post("/folders", { name: newFolderName });
-      setNewFolderName("");
-      setShowFolderModal(false);
-      fetchData();
-    } catch (err) {
-      console.error(err);
-    }
+    await api.post("/folders", { name: newFolderName });
+    setNewFolderName(""); setShowFolderModal(false); fetchData();
   };
 
-  const handleDeleteFolder = async (folderId: number, e: React.MouseEvent) => {
+  const handleDeleteFolder = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this folder? Decks inside it will not be deleted, but they will be unassigned.")) return;
-    try {
-      await api.delete(`/folders/${folderId}`);
-      if (selectedFolderId === folderId) {
-        setSelectedFolderId(null);
-      }
-      fetchData();
-    } catch (err) {
-      console.error(err);
-    }
+    if (!confirm("Delete this folder? Decks inside will be unassigned.")) return;
+    await api.delete(`/folders/${id}`);
+    if (selectedFolderId === id) setSelectedFolderId(null);
+    fetchData();
   };
 
   const handleCreateDeck = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeckName.trim()) return;
-    try {
-      const data = await api.post<Deck>("/decks", {
-        name: newDeckName,
-        folder_id: newDeckFolderId || undefined,
-        source_type: "manual"
-      });
-      setNewDeckName("");
-      setNewDeckFolderId(null);
-      setShowDeckModal(false);
-      onSelectDeck(data.id);
-    } catch (err) {
-      console.error(err);
-    }
+    const data = await api.post<Deck>("/decks", { name: newDeckName, folder_id: newDeckFolderId || undefined, source_type: "manual" });
+    setNewDeckName(""); setNewDeckFolderId(null); setShowDeckModal(false);
+    onSelectDeck(data.id);
   };
 
-  const handleDeleteDeck = async (deckId: number, e: React.MouseEvent) => {
+  const handleDeleteDeck = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this deck?")) return;
-    try {
-      await api.delete(`/decks/${deckId}`);
-      fetchData();
-    } catch (err) {
-      console.error(err);
-    }
+    if (!confirm("Delete this deck?")) return;
+    await api.delete(`/decks/${id}`); fetchData();
   };
 
   const handleAIGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiDeckName.trim()) {
-      setAiError("Please provide a name for the new deck.");
-      return;
-    }
-    if (aiSourceType === "url" && !aiUrl.trim()) {
-      setAiError("Please provide a website URL.");
-      return;
-    }
-    if (aiSourceType === "text" && !aiTextContent.trim()) {
-      setAiError("Please input text content.");
-      return;
-    }
-    if (aiSourceType === "file" && !aiFile) {
-      setAiError("Please upload a supported file.");
-      return;
-    }
+    if (!aiDeckName.trim()) { setAiError("Please name the deck."); return; }
+    if (aiSourceType === "url" && !aiUrl.trim()) { setAiError("Provide a URL."); return; }
+    if (aiSourceType === "text" && !aiTextContent.trim()) { setAiError("Paste some text."); return; }
+    if (aiSourceType === "file" && !aiFile) { setAiError("Choose a file."); return; }
 
-    setAiError("");
-    setAiGenerating(true);
-
+    setAiError(""); setAiGenerating(true);
     try {
-      const formData = new FormData();
-      formData.append("deck_name", aiDeckName);
-      if (aiFolderId) {
-        formData.append("folder_id", aiFolderId);
-      }
-      formData.append("source_type", aiSourceType);
-      formData.append("num_cards", aiNumCards.toString());
-
-      if (aiSourceType === "text") {
-        formData.append("text_content", aiTextContent);
-      } else if (aiSourceType === "url") {
-        formData.append("url", aiUrl);
-      } else if (aiSourceType === "file" && aiFile) {
-        formData.append("file", aiFile);
-      }
-
-      const response = await api.post<{ deck_id: number }>("/ai/generate", formData);
+      const fd = new FormData();
+      fd.append("deck_name", aiDeckName);
+      if (aiFolderId) fd.append("folder_id", aiFolderId);
+      fd.append("source_type", aiSourceType);
+      fd.append("num_cards", aiNumCards.toString());
+      if (aiSourceType === "text") fd.append("text_content", aiTextContent);
+      else if (aiSourceType === "url") fd.append("url", aiUrl);
+      else if (aiFile) fd.append("file", aiFile);
+      const res = await api.post<{ deck_id: number }>("/ai/generate", fd);
       setShowAIModal(false);
-      
-      // Reset fields
-      setAiDeckName("");
-      setAiFolderId("");
-      setAiTextContent("");
-      setAiUrl("");
-      setAiFile(null);
-      
-      onSelectDeck(response.deck_id);
+      setAiDeckName(""); setAiFolderId(""); setAiTextContent(""); setAiUrl(""); setAiFile(null);
+      onSelectDeck(res.deck_id);
     } catch (err: any) {
-      setAiError(err.message || "Failed to generate AI flashcards.");
-    } finally {
-      setAiGenerating(false);
-    }
+      setAiError(err.message || "AI generation failed.");
+    } finally { setAiGenerating(false); }
   };
 
-  const filteredDecks = decks.filter((deck) => {
-    const matchesFolder = selectedFolderId === null || deck.folder_id === selectedFolderId;
-    const matchesSearch = deck.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (deck.source_name && deck.source_name.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesFolder && matchesSearch;
+  const filtered = decks.filter(d => {
+    const inFolder = selectedFolderId === null || d.folder_id === selectedFolderId;
+    const matches = d.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return inFolder && matches;
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 pb-12">
-      {/* Top Banner */}
-      <div className="bg-primary text-ink p-4 sm:p-6 neo-border shadow-neo mb-6 sm:mb-8 flex flex-col gap-4">
+    <div>
+      {/* Header row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-black mb-1">DASHBOARD</h2>
-          <p className="font-bold text-gray-800 text-sm sm:text-base">
-            Generate and review your AI cards. Accelerate your knowledge.
-          </p>
+          <h1 className="text-2xl font-bold text-[#0F172A]">My Decks</h1>
+          <p className="text-sm text-[#64748B] mt-0.5">{decks.length} deck{decks.length !== 1 ? "s" : ""} total</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => setShowAIModal(true)}
-            className="neo-btn bg-accent hover:bg-violet-300 text-ink flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            <Zap size={18} className="fill-current" />
-            AI GENERATE CARDS
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowDeckModal(true)} className="btn-secondary cursor-pointer">
+            <Plus size={16} /> New deck
           </button>
-          <button
-            onClick={() => setShowDeckModal(true)}
-            className="neo-btn bg-white hover:bg-gray-100 text-ink flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            <Plus size={18} />
-            NEW MANUAL DECK
+          <button onClick={() => setShowAIModal(true)} className="btn-primary cursor-pointer">
+            <Zap size={16} /> Generate with AI
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 sm:gap-8">
-        {/* Sidebar - Folders & Search */}
-        <div className="space-y-6 lg:col-span-1">
-          {/* Search Card */}
-          <div className="bg-white neo-card shadow-neo-sm p-4">
-            <h3 className="font-bold uppercase mb-2 tracking-wider text-sm flex items-center gap-2">
-              <Search size={16} /> SEARCH DECKS
-            </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar */}
+        <aside className="space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
             <input
+              className="input pl-9"
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Type deck name..."
-              className="w-full neo-input text-sm"
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search decks..."
             />
           </div>
 
-          {/* Folders Card */}
-          <div className="bg-white neo-card shadow-neo-sm p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                <Folder size={16} /> FOLDERS
-              </h3>
+          {/* Folders */}
+          <div className="card !p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider">Folders</span>
               <button
                 onClick={() => setShowFolderModal(true)}
-                className="p-1 hover:bg-gray-200 neo-border bg-cream"
-                title="Create Folder"
+                className="p-1 rounded-md hover:bg-[#F7F3FD] text-[#94A3B8] hover:text-[#7C3AED] transition-colors cursor-pointer"
+                title="New folder"
               >
-                <Plus size={16} />
+                <Plus size={15} />
               </button>
             </div>
-
-            <div className="space-y-2">
+            <div className="space-y-1">
               <button
                 onClick={() => setSelectedFolderId(null)}
-                className={`w-full text-left font-bold py-1.5 px-3 neo-border text-sm flex justify-between items-center ${
-                  selectedFolderId === null ? "bg-primary" : "bg-cream hover:bg-yellow-50"
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                  selectedFolderId === null ? "bg-[#F7F3FD] text-[#7C3AED] font-semibold" : "text-[#64748B] hover:bg-[#F7F3FD] hover:text-[#0F172A]"
                 }`}
               >
-                <span>📂 All Folders</span>
-                <span className="bg-white px-2 py-0.5 neo-border text-xs">
-                  {decks.length}
-                </span>
+                <span className="flex items-center gap-2"><Folder size={14} /> All decks</span>
+                <span className="text-xs bg-[#EFE7FC] text-[#7C3AED] px-1.5 py-0.5 rounded-full font-medium">{decks.length}</span>
               </button>
-
-              {folders.map((f) => {
+              {folders.map(f => {
                 const count = decks.filter(d => d.folder_id === f.id).length;
                 return (
                   <button
                     key={f.id}
                     onClick={() => setSelectedFolderId(f.id)}
-                    className={`w-full text-left font-bold py-1.5 px-3 neo-border text-sm flex justify-between items-center group ${
-                      selectedFolderId === f.id ? "bg-accent" : "bg-white hover:bg-violet-50"
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors group cursor-pointer ${
+                      selectedFolderId === f.id ? "bg-[#F7F3FD] text-[#7C3AED] font-semibold" : "text-[#64748B] hover:bg-[#F7F3FD] hover:text-[#0F172A]"
                     }`}
                   >
-                    <span className="truncate">📁 {f.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="bg-cream px-2 py-0.5 neo-border text-xs">
-                        {count}
-                      </span>
+                    <span className="flex items-center gap-2 truncate"><Folder size={14} /> {f.name}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs bg-[#EFE7FC] text-[#7C3AED] px-1.5 py-0.5 rounded-full font-medium">{count}</span>
                       <button
-                        onClick={(e) => handleDeleteFolder(f.id, e)}
-                        className="text-secondary opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-100 neo-border bg-white"
-                        title="Delete Folder"
+                        onClick={e => handleDeleteFolder(f.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-500 transition-all cursor-pointer"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -287,64 +194,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDeck }) => {
               })}
             </div>
           </div>
-        </div>
+        </aside>
 
-        {/* Decks Grid */}
+        {/* Deck grid */}
         <div className="lg:col-span-3">
-          <h3 className="text-2xl font-black mb-4 tracking-tight flex items-center gap-2">
-            DECKS IN {selectedFolderId === null ? "ALL FOLDERS" : folders.find(f => f.id === selectedFolderId)?.name.toUpperCase()}
-          </h3>
-
           {loading ? (
-            <div className="text-center py-12 font-bold text-lg">
-              LOADING DECKS...
-            </div>
-          ) : filteredDecks.length === 0 ? (
-            <div className="neo-card bg-white py-12 text-center text-gray-500 font-bold">
-              NO DECKS FOUND. CREATE ONE ABOVE!
+            <div className="text-center py-16 text-[#64748B] text-sm">Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div className="card text-center py-16 border-dashed !border-[#EFE7FC]">
+              <p className="text-[#64748B] text-sm mb-4">No decks here yet.</p>
+              <button onClick={() => setShowAIModal(true)} className="btn-primary cursor-pointer">
+                <Zap size={15} /> Generate with AI
+              </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              {filteredDecks.map((deck) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {filtered.map((deck, i) => (
                 <div
                   key={deck.id}
                   onClick={() => onSelectDeck(deck.id)}
-                  className="neo-card bg-white cursor-pointer hover:-translate-y-1 transition-all flex flex-col justify-between"
+                  className={`card cursor-pointer flex flex-col justify-between group animate-fade-up delay-${Math.min(i * 75, 225)}`}
                 >
                   <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-xl font-bold tracking-tight text-ink hover:underline truncate">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-semibold text-[#0F172A] group-hover:text-[#7C3AED] transition-colors leading-snug pr-2">
                         {deck.name}
-                      </h4>
+                      </h3>
                       <button
-                        onClick={(e) => handleDeleteDeck(deck.id, e)}
-                        className="text-secondary hover:text-red-700 p-1 hover:bg-red-50 neo-border bg-white"
-                        title="Delete Deck"
+                        onClick={e => handleDeleteDeck(deck.id, e)}
+                        className="shrink-0 p-1 text-[#CBD5E1] hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
-
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      <span className="bg-yellow-100 text-ink text-xs font-bold px-2 py-0.5 neo-border">
-                        {deck.card_count} CARDS
-                      </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="badge bg-[#F7F3FD] text-[#7C3AED]">{deck.card_count} cards</span>
                       {deck.source_type !== "manual" && (
-                        <span className="bg-violet-100 text-ink text-xs font-bold px-2 py-0.5 neo-border flex items-center gap-1 uppercase">
-                          <Zap size={10} className="fill-current text-violet-500" />
-                          AI: {deck.source_type}
+                        <span className="badge bg-amber-50 text-amber-700">
+                          <Zap size={10} /> AI
                         </span>
                       )}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs text-gray-600 font-semibold border-t-2 border-black pt-3">
-                    <span>
-                      {deck.source_name ? `From: ${deck.source_name}` : "Created Manually"}
-                    </span>
-                    <span>
-                      {new Date(deck.created_at).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#EFE7FC]">
+                    <span className="text-xs text-[#94A3B8] truncate">{deck.source_name || "Manual"}</span>
+                    <ChevronRight size={15} className="text-[#CBD5E1] group-hover:text-[#7C3AED] transition-colors shrink-0" />
                   </div>
                 </div>
               ))}
@@ -353,271 +247,155 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDeck }) => {
         </div>
       </div>
 
-      {/* --- CREATE FOLDER MODAL --- */}
+      {/* Modal backdrop helper */}
+      {(showFolderModal || showDeckModal || showAIModal) && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40"
+          onClick={() => { if (!aiGenerating) { setShowFolderModal(false); setShowDeckModal(false); setShowAIModal(false); } }}
+        />
+      )}
+
+      {/* Create Folder Modal */}
       {showFolderModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white neo-border-lg p-6 w-full max-w-sm relative">
-            <button
-              onClick={() => setShowFolderModal(false)}
-              className="absolute -top-3 -right-3 bg-secondary text-white font-bold w-8 h-8 rounded-none neo-border flex items-center justify-center cursor-pointer"
-            >
-              ×
-            </button>
-            <h3 className="text-xl font-black mb-4">CREATE FOLDER</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-sm !p-6 animate-pop-in relative">
+            <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 text-[#94A3B8] hover:text-[#0F172A] cursor-pointer"><X size={18} /></button>
+            <h2 className="font-bold text-[#0F172A] mb-4">New folder</h2>
             <form onSubmit={handleCreateFolder} className="space-y-4">
-              <div>
-                <label className="block font-bold text-xs uppercase mb-1">Folder Name</label>
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="e.g., Biology Exam"
-                  className="w-full neo-input text-sm"
-                  required
-                />
-              </div>
-              <button type="submit" className="w-full neo-btn-primary py-2 text-sm">
-                CREATE FOLDER
-              </button>
+              <input className="input" type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Biology Exam" required />
+              <button type="submit" className="btn-primary w-full justify-center cursor-pointer">Create</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- CREATE MANUAL DECK MODAL --- */}
+      {/* Create Manual Deck Modal */}
       {showDeckModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white neo-border-lg p-6 w-full max-w-sm relative">
-            <button
-              onClick={() => setShowDeckModal(false)}
-              className="absolute -top-3 -right-3 bg-secondary text-white font-bold w-8 h-8 rounded-none neo-border flex items-center justify-center cursor-pointer"
-            >
-              ×
-            </button>
-            <h3 className="text-xl font-black mb-4">NEW MANUAL DECK</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-sm !p-6 animate-pop-in relative">
+            <button onClick={() => setShowDeckModal(false)} className="absolute top-4 right-4 text-[#94A3B8] hover:text-[#0F172A] cursor-pointer"><X size={18} /></button>
+            <h2 className="font-bold text-[#0F172A] mb-4">New deck</h2>
             <form onSubmit={handleCreateDeck} className="space-y-4">
               <div>
-                <label className="block font-bold text-xs uppercase mb-1">Deck Name</label>
-                <input
-                  type="text"
-                  value={newDeckName}
-                  onChange={(e) => setNewDeckName(e.target.value)}
-                  placeholder="e.g., Chemistry Formulas"
-                  className="w-full neo-input text-sm"
-                  required
-                />
+                <label className="block text-sm font-medium text-[#0F172A] mb-1">Deck name</label>
+                <input className="input" type="text" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} placeholder="Chemistry Formulas" required />
               </div>
               <div>
-                <label className="block font-bold text-xs uppercase mb-1">Assign to Folder</label>
-                <select
-                  value={newDeckFolderId || ""}
-                  onChange={(e) => setNewDeckFolderId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full neo-input text-sm"
-                >
-                  <option value="">No Folder (Unassigned)</option>
-                  {folders.map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
+                <label className="block text-sm font-medium text-[#0F172A] mb-1">Folder (optional)</label>
+                <select className="input" value={newDeckFolderId || ""} onChange={e => setNewDeckFolderId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">No folder</option>
+                  {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
               </div>
-              <button type="submit" className="w-full neo-btn-primary py-2 text-sm">
-                CREATE DECK
-              </button>
+              <button type="submit" className="btn-primary w-full justify-center cursor-pointer">Create</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- AI GENERATOR MODAL --- */}
+      {/* AI Generator Modal */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white neo-border-lg p-6 w-full max-w-xl relative my-8">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-lg !p-6 animate-pop-in relative my-8">
             <button
               onClick={() => !aiGenerating && setShowAIModal(false)}
-              className="absolute -top-3 -right-3 bg-secondary text-white font-bold w-8 h-8 rounded-none neo-border flex items-center justify-center cursor-pointer disabled:opacity-50"
               disabled={aiGenerating}
+              className="absolute top-4 right-4 text-[#94A3B8] hover:text-[#0F172A] disabled:opacity-40 cursor-pointer"
             >
-              ×
+              <X size={18} />
             </button>
-            
-            <h3 className="text-2xl font-black mb-1 flex items-center gap-2">
-              <Zap size={24} className="fill-current text-primary" /> AI FLASHCARD GENERATOR
-            </h3>
-            <p className="text-gray-600 text-sm font-semibold mb-6">
-              Enter content, a website link, or upload notes. Our AI constructs QA pairs instantly.
-            </p>
+
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-7 h-7 rounded-lg bg-[#7C3AED] flex items-center justify-center">
+                <Zap size={14} className="text-white" />
+              </div>
+              <h2 className="font-bold text-[#0F172A]">Generate with AI</h2>
+            </div>
+            <p className="text-sm text-[#64748B] mb-5">Paste text, a URL, or upload a file — Gemini builds the deck.</p>
 
             {aiError && (
-              <div className="bg-secondary text-white font-bold p-3 neo-border mb-4 text-xs">
-                ERROR: {aiError}
-              </div>
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">{aiError}</div>
             )}
 
             <form onSubmit={handleAIGenerate} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-xs uppercase mb-1">Deck Name</label>
-                  <input
-                    type="text"
-                    value={aiDeckName}
-                    onChange={(e) => setAiDeckName(e.target.value)}
-                    placeholder="e.g., Cellular Biology"
-                    className="w-full neo-input text-sm"
-                    disabled={aiGenerating}
-                    required
-                  />
+                  <label className="block text-sm font-medium text-[#0F172A] mb-1">Deck name</label>
+                  <input className="input" type="text" value={aiDeckName} onChange={e => setAiDeckName(e.target.value)} placeholder="Cellular Biology" disabled={aiGenerating} required />
                 </div>
                 <div>
-                  <label className="block font-bold text-xs uppercase mb-1">Assign Folder</label>
-                  <select
-                    value={aiFolderId}
-                    onChange={(e) => setAiFolderId(e.target.value)}
-                    className="w-full neo-input text-sm"
-                    disabled={aiGenerating}
-                  >
-                    <option value="">No Folder (Unassigned)</option>
-                    {folders.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
+                  <label className="block text-sm font-medium text-[#0F172A] mb-1">Folder</label>
+                  <select className="input" value={aiFolderId} onChange={e => setAiFolderId(e.target.value)} disabled={aiGenerating}>
+                    <option value="">No folder</option>
+                    {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Source Switcher */}
-              <div>
-                <label className="block font-bold text-xs uppercase mb-1">Source Type</label>
-                <div className="grid grid-cols-3 gap-2">
+              {/* Source type tabs */}
+              <div className="flex rounded-lg border border-[#EFE7FC] overflow-hidden">
+                {(["text", "url", "file"] as const).map((type, i) => (
                   <button
+                    key={type}
                     type="button"
-                    onClick={() => setAiSourceType("text")}
-                    className={`py-2 px-3 font-bold text-xs neo-border flex items-center justify-center gap-1.5 ${
-                      aiSourceType === "text" ? "bg-primary" : "bg-cream hover:bg-yellow-50"
-                    }`}
+                    onClick={() => setAiSourceType(type)}
                     disabled={aiGenerating}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 transition-colors cursor-pointer ${
+                      i > 0 ? "border-l border-[#EFE7FC]" : ""
+                    } ${aiSourceType === type ? "bg-[#F7F3FD] text-[#7C3AED]" : "text-[#64748B] hover:bg-[#FAFAFA]"}`}
                   >
-                    <FileText size={14} /> NOTES
+                    {type === "text" && <><FileText size={13} /> Notes</>}
+                    {type === "url"  && <><Globe size={13} /> Website</>}
+                    {type === "file" && <><FileUp size={13} /> File</>}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setAiSourceType("url")}
-                    className={`py-2 px-3 font-bold text-xs neo-border flex items-center justify-center gap-1.5 ${
-                      aiSourceType === "url" ? "bg-primary" : "bg-cream hover:bg-yellow-50"
-                    }`}
-                    disabled={aiGenerating}
-                  >
-                    <Globe size={14} /> WEBSITE
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAiSourceType("file")}
-                    className={`py-2 px-3 font-bold text-xs neo-border flex items-center justify-center gap-1.5 ${
-                      aiSourceType === "file" ? "bg-primary" : "bg-cream hover:bg-yellow-50"
-                    }`}
-                    disabled={aiGenerating}
-                  >
-                    <FileUp size={14} /> UPLOAD FILE
-                  </button>
-                </div>
+                ))}
               </div>
 
-              {/* Input Area based on source type */}
+              {/* Source input */}
               {aiSourceType === "text" && (
-                <div>
-                  <label className="block font-bold text-xs uppercase mb-1">Raw Notes / Text</label>
-                  <textarea
-                    value={aiTextContent}
-                    onChange={(e) => setAiTextContent(e.target.value)}
-                    rows={6}
-                    placeholder="Paste notes, slides, transcripts, or summaries here..."
-                    className="w-full neo-input text-sm font-sans"
-                    disabled={aiGenerating}
-                  />
-                </div>
-              )}
-
-              {aiSourceType === "url" && (
-                <div>
-                  <label className="block font-bold text-xs uppercase mb-1">Website URL</label>
-                  <input
-                    type="url"
-                    value={aiUrl}
-                    onChange={(e) => setAiUrl(e.target.value)}
-                    placeholder="https://en.wikipedia.org/wiki/Photosynthesis"
-                    className="w-full neo-input text-sm"
-                    disabled={aiGenerating}
-                  />
-                </div>
-              )}
-
-              {aiSourceType === "file" && (
-                <div className="p-4 bg-yellow-50 neo-border border-dashed border-2 border-black text-center">
-                  <input
-                    type="file"
-                    id="ai-upload"
-                    accept=".pdf,.png,.jpg,.jpeg,.txt"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setAiFile(e.target.files[0]);
-                      }
-                    }}
-                    className="hidden"
-                    disabled={aiGenerating}
-                  />
-                  <label htmlFor="ai-upload" className="cursor-pointer font-bold text-sm hover:underline block">
-                    {aiFile ? `Selected: ${aiFile.name}` : "CLICK TO CHOOSE A FILE (PDF, TXT, or IMAGE)"}
-                  </label>
-                  <span className="text-xs text-gray-500 font-semibold mt-1 block">
-                    Images are processed via Gemini Multimodal Vision OCR.
-                  </span>
-                </div>
-              )}
-
-              {/* Slider for card count */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block font-bold text-xs uppercase">Number of Cards to Generate</label>
-                  <span className="bg-black text-white px-2 py-0.5 text-xs font-bold neo-border">
-                    {aiNumCards} CARDS
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="3"
-                  max="20"
-                  value={aiNumCards}
-                  onChange={(e) => setAiNumCards(Number(e.target.value))}
-                  className="w-full accent-black"
+                <textarea
+                  className="input resize-none"
+                  rows={5}
+                  value={aiTextContent}
+                  onChange={e => setAiTextContent(e.target.value)}
+                  placeholder="Paste your notes, slides, or summaries here..."
                   disabled={aiGenerating}
                 />
+              )}
+              {aiSourceType === "url" && (
+                <input className="input" type="url" value={aiUrl} onChange={e => setAiUrl(e.target.value)} placeholder="https://en.wikipedia.org/wiki/Photosynthesis" disabled={aiGenerating} />
+              )}
+              {aiSourceType === "file" && (
+                <label className="block border-2 border-dashed border-[#EFE7FC] rounded-xl p-6 text-center cursor-pointer hover:border-[#7C3AED] transition-colors">
+                  <input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" className="hidden" disabled={aiGenerating}
+                    onChange={e => e.target.files?.[0] && setAiFile(e.target.files[0])} />
+                  <FileUp size={24} className="mx-auto mb-2 text-[#94A3B8]" />
+                  <p className="text-sm font-medium text-[#0F172A]">{aiFile ? aiFile.name : "Click to upload"}</p>
+                  <p className="text-xs text-[#94A3B8] mt-1">PDF, TXT, PNG, JPG</p>
+                </label>
+              )}
+
+              {/* Card count */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm font-medium text-[#0F172A]">Number of cards</label>
+                  <span className="text-sm font-bold text-[#7C3AED]">{aiNumCards}</span>
+                </div>
+                <input type="range" min="3" max="20" value={aiNumCards} onChange={e => setAiNumCards(Number(e.target.value))}
+                  className="w-full accent-[#7C3AED] cursor-pointer" disabled={aiGenerating} />
               </div>
 
-              {/* Submit / Info */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={aiGenerating}
-                  className="w-full neo-btn-primary py-3 text-lg font-black flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {aiGenerating ? (
-                    <>
-                      <div className="w-5 h-5 border-3 border-black border-t-transparent rounded-full animate-spin"></div>
-                      GENERATING DECK USING AI...
-                    </>
-                  ) : (
-                    <>
-                      <Zap size={18} className="fill-current" /> GENERATE NOW
-                    </>
-                  )}
-                </button>
-                <div className="flex gap-1.5 items-center mt-3 text-xs text-gray-500 font-semibold justify-center">
-                  <Info size={12} />
-                  <span>Uses gemini-1.5-flash for structured generation. Fallbacks enabled if offline.</span>
-                </div>
-              </div>
+              <button type="submit" disabled={aiGenerating} className="btn-primary w-full justify-center py-3 cursor-pointer">
+                {aiGenerating ? (
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</>
+                ) : (
+                  <><Zap size={16} /> Generate now</>
+                )}
+              </button>
             </form>
           </div>
         </div>
       )}
     </div>
   );
-};
+}

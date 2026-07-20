@@ -1,338 +1,234 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../utils/api";
-import { ArrowLeft, CheckCircle, RefreshCw, Trophy, Volume2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Trophy, Volume2, CheckCircle } from "lucide-react";
+import confetti from "canvas-confetti";
 
 interface Card {
-  id: number;
-  deck_id: number;
-  front: string;
-  back: string;
-  interval: number;
-  ease_factor: number;
-  repetitions: number;
-  next_review: string;
+  id: number; front: string; back: string; next_review: string;
 }
 
-interface StudyModeProps {
-  deckId: number;
-  onBack: () => void;
-}
+// Web Audio synth — no deps
+const beep = (freq: number, type: OscillatorType, duration: number, vol = 0.08) => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  } catch { /* silently fail if audio not available */ }
+};
 
-export const StudyMode: React.FC<StudyModeProps> = ({ deckId, onBack }) => {
+const sounds = {
+  flip:  () => beep(280, "sine", 0.1),
+  good:  () => beep(660, "sine", 0.12),
+  again: () => beep(180, "triangle", 0.2),
+  win:   () => [440, 554, 659, 880].forEach((f, i) => setTimeout(() => beep(f, "square", 0.25, 0.05), i * 100)),
+};
+
+export function StudyMode({ deckId, onBack }: { deckId: number; onBack: () => void }) {
   const [allCards, setAllCards] = useState<Card[]>([]);
-  const [studyQueue, setStudyQueue] = useState<Card[]>([]);
-  const [filterDueOnly, setFilterDueOnly] = useState(true);
+  const [queue, setQueue] = useState<Card[]>([]);
+  const [dueOnly, setDueOnly] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  // Active study state
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
-
-  // Session stats
-  const [studiedCount, setStudiedCount] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
+  const [idx, setIdx] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [done, setDone] = useState(false);
+  const [studied, setStudied] = useState(0);
+  const [correct, setCorrect] = useState(0);
 
   const loadCards = async () => {
-    try {
-      setLoading(true);
-      const cardsData = await api.get<Card[]>(`/decks/${deckId}/cards`);
-      setAllCards(cardsData);
-      
-      // Separate due cards
-      const now = new Date();
-      const due = cardsData.filter((c) => new Date(c.next_review) <= now);
-      
-      if (due.length > 0) {
-        setStudyQueue(due);
-        setFilterDueOnly(true);
-      } else {
-        setStudyQueue(cardsData);
-        setFilterDueOnly(false);
-      }
-      
-      setCurrentIndex(0);
-      setIsFlipped(false);
-      setIsFinished(false);
-      setStudiedCount(0);
-      setCorrectCount(0);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const data = await api.get<Card[]>(`/decks/${deckId}/cards`);
+    setAllCards(data);
+    const now = new Date();
+    const due = data.filter(c => new Date(c.next_review) <= now);
+    const q = due.length > 0 ? due : data;
+    setDueOnly(due.length > 0);
+    setQueue(q);
+    setIdx(0); setFlipped(false); setDone(false); setStudied(0); setCorrect(0);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    loadCards();
-  }, [deckId]);
+  useEffect(() => { loadCards(); }, [deckId]);
 
-  // Adjust study queue filter
-  const toggleFilter = (dueOnly: boolean) => {
-    setFilterDueOnly(dueOnly);
-    if (dueOnly) {
-      const now = new Date();
-      const due = allCards.filter((c) => new Date(c.next_review) <= now);
-      setStudyQueue(due);
+  const switchMode = (wantDue: boolean) => {
+    setDueOnly(wantDue);
+    const now = new Date();
+    setQueue(wantDue ? allCards.filter(c => new Date(c.next_review) <= now) : allCards);
+    setIdx(0); setFlipped(false); setDone(false); setStudied(0); setCorrect(0);
+  };
+
+  const score = async (s: number) => {
+    if (!queue.length) return;
+    s >= 3 ? sounds.good() : sounds.again();
+    const isCorrect = s >= 3;
+    const newStudied = studied + 1;
+    const newCorrect = correct + (isCorrect ? 1 : 0);
+    setStudied(newStudied); setCorrect(newCorrect);
+
+    try { await api.post(`/flashcards/${queue[idx].id}/score`, { score: s }); } catch { /* best effort */ }
+
+    if (idx + 1 < queue.length) {
+      setFlipped(false);
+      setTimeout(() => setIdx(i => i + 1), 250);
     } else {
-      setStudyQueue(allCards);
-    }
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsFinished(false);
-    setStudiedCount(0);
-    setCorrectCount(0);
-  };
-
-  const handleScoreCard = async (score: number) => {
-    if (studyQueue.length === 0) return;
-    const activeCard = studyQueue[currentIndex];
-    
-    // Track stats
-    setStudiedCount((prev) => prev + 1);
-    if (score >= 3) {
-      setCorrectCount((prev) => prev + 1);
-    }
-
-    try {
-      // Post score to SM-2 endpoint
-      await api.post(`/flashcards/${activeCard.id}/score`, { score });
-      
-      // Transition card
-      if (currentIndex + 1 < studyQueue.length) {
-        setIsFlipped(false);
-        setTimeout(() => {
-          setCurrentIndex((prev) => prev + 1);
-        }, 150);
-      } else {
-        // Finished study loop
-        setIsFinished(true);
-        // Post session stats to database
-        const finalAccuracy = studiedCount + 1 > 0 
-          ? ((correctCount + (score >= 3 ? 1 : 0)) / (studiedCount + 1)) * 100 
-          : 0;
+      setDone(true);
+      sounds.win();
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ["#7C3AED", "#059669", "#F59E0B"] });
+      try {
         await api.post("/stats/session", {
           deck_id: deckId,
-          cards_studied: studiedCount + 1,
-          accuracy: finalAccuracy
+          cards_studied: newStudied,
+          accuracy: newStudied > 0 ? (newCorrect / newStudied) * 100 : 0,
         });
-      }
-    } catch (err) {
-      console.error("Failed to score card", err);
+      } catch { /* best effort */ }
     }
   };
 
-  const speakText = (text: string) => {
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  const flip = () => { sounds.flip(); setFlipped(f => !f); };
+  const speak = (text: string) => window.speechSynthesis?.speak(new SpeechSynthesisUtterance(text));
 
-  if (loading) {
-    return <div className="text-center py-12 font-bold text-lg">PREPARING FLASHCARDS...</div>;
-  }
+  if (loading) return <div className="text-center py-12 text-sm text-[#64748B]">Loading cards...</div>;
 
-  if (allCards.length === 0) {
-    return (
-      <div className="max-w-md mx-auto px-4 text-center py-12 bg-white neo-card relative">
-        <h3 className="text-xl font-black mb-4">DECK IS EMPTY</h3>
-        <p className="font-semibold text-gray-600 mb-6">Create or import cards first before studying!</p>
-        <button onClick={onBack} className="neo-btn-primary py-2 px-6">
-          GO BACK
-        </button>
-      </div>
-    );
-  }
-
-  const currentCard = studyQueue[currentIndex];
+  if (!allCards.length) return (
+    <div className="max-w-md mx-auto text-center py-16">
+      <p className="text-[#64748B] mb-4 text-sm">This deck has no cards yet.</p>
+      <button onClick={onBack} className="btn-primary cursor-pointer"><ArrowLeft size={15} /> Go back</button>
+    </div>
+  );
 
   return (
-    <div className="max-w-2xl mx-auto px-3 sm:px-4 pb-12">
-      {/* Back Header */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={onBack}
-          className="neo-btn bg-white hover:bg-gray-100 flex items-center gap-1.5 py-1 px-3 text-xs"
-        >
-          <ArrowLeft size={14} /> EXIT STUDY
-        </button>
-
-        {!isFinished && studyQueue.length > 0 && (
-          <span className="bg-black text-white px-3 py-1 font-bold text-sm neo-border">
-            CARD {currentIndex + 1} OF {studyQueue.length}
+    <div className="max-w-xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={onBack} className="btn-ghost cursor-pointer"><ArrowLeft size={16} /> Exit</button>
+        {!done && queue.length > 0 && (
+          <span className="text-sm font-medium text-[#64748B]">
+            {idx + 1} <span className="text-[#CBD5E1]">/</span> {queue.length}
           </span>
         )}
       </div>
 
-      {/* Mode Filter Selector */}
-      {!isFinished && (
-        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6">
-          <button
-            onClick={() => toggleFilter(true)}
-            className={`py-1.5 px-4 font-bold text-xs neo-border ${
-              filterDueOnly ? "bg-primary" : "bg-white hover:bg-gray-100"
-            }`}
-          >
-            DUE CARDS ONLY (
-            {allCards.filter((c) => new Date(c.next_review) <= new Date()).length}
-            )
-          </button>
-          <button
-            onClick={() => toggleFilter(false)}
-            className={`py-1.5 px-4 font-bold text-xs neo-border ${
-              !filterDueOnly ? "bg-primary" : "bg-white hover:bg-gray-100"
-            }`}
-          >
-            ALL DECK CARDS ({allCards.length})
-          </button>
+      {/* Mode filter */}
+      {!done && (
+        <div className="flex rounded-lg border border-[#EFE7FC] overflow-hidden mb-6 text-sm">
+          {[true, false].map(d => (
+            <button
+              key={String(d)}
+              onClick={() => switchMode(d)}
+              className={`flex-1 py-2 font-semibold transition-colors cursor-pointer ${d !== dueOnly ? "border-l border-[#EFE7FC]" : ""} ${dueOnly === d ? "bg-[#F7F3FD] text-[#7C3AED]" : "text-[#64748B] hover:bg-[#FAFAFA]"}`}
+            >
+              {d ? `Due (${allCards.filter(c => new Date(c.next_review) <= new Date()).length})` : `All (${allCards.length})`}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* --- FINISHED PANEL --- */}
-      {isFinished ? (
-        <div className="bg-white neo-card shadow-neo p-8 text-center space-y-6 relative">
-          <div className="absolute -top-5 right-1/2 translate-x-1/2 bg-yellow-400 p-2 rounded-none neo-border">
-            <Trophy size={32} className="text-black fill-current" />
+      {/* Done screen */}
+      {done ? (
+        <div className="card text-center py-10 animate-pop-in">
+          <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-4">
+            <Trophy size={28} className="text-amber-500" />
           </div>
-
-          <h3 className="text-3xl font-black pt-4">SESSION COMPLETE!</h3>
-          <p className="font-bold text-gray-700">
-            Great job! You've reviewed all selected cards.
-          </p>
-
-          <div className="grid grid-cols-2 gap-4 border-2 border-black p-4 bg-cream">
-            <div className="text-center">
-              <span className="block text-gray-500 font-bold text-xs uppercase">Cards Reviewed</span>
-              <span className="text-3xl font-black">{studiedCount}</span>
+          <h2 className="text-xl font-bold text-[#0F172A] mb-1">Session complete!</h2>
+          <p className="text-sm text-[#64748B] mb-6">You reviewed all {studied} cards.</p>
+          <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto mb-8">
+            <div className="bg-[#F7F3FD] rounded-xl p-4">
+              <p className="text-2xl font-bold text-[#7C3AED]">{studied}</p>
+              <p className="text-xs text-[#64748B] mt-0.5">Reviewed</p>
             </div>
-            <div className="text-center">
-              <span className="block text-gray-500 font-bold text-xs uppercase">Accuracy Rate</span>
-              <span className="text-3xl font-black">
-                {studiedCount > 0 ? Math.round((correctCount / studiedCount) * 100) : 0}%
-              </span>
+            <div className="bg-[#F0FDF9] rounded-xl p-4">
+              <p className="text-2xl font-bold text-[#059669]">
+                {studied > 0 ? Math.round((correct / studied) * 100) : 0}%
+              </p>
+              <p className="text-xs text-[#64748B] mt-0.5">Accuracy</p>
             </div>
           </div>
-
-          <div className="flex justify-center gap-4 pt-2">
-            <button onClick={loadCards} className="neo-btn bg-accent hover:bg-violet-300 text-sm flex items-center gap-1.5">
-              <RefreshCw size={16} /> STUDY AGAIN
-            </button>
-            <button onClick={onBack} className="neo-btn-primary text-sm">
-              RETURN TO DECK
-            </button>
+          <div className="flex justify-center gap-3">
+            <button onClick={loadCards} className="btn-secondary cursor-pointer"><RotateCcw size={15} /> Again</button>
+            <button onClick={onBack} className="btn-primary cursor-pointer">Done</button>
           </div>
         </div>
-      ) : studyQueue.length === 0 ? (
-        <div className="bg-white neo-card shadow-neo p-8 text-center space-y-6">
-          <CheckCircle size={48} className="mx-auto text-green-500 fill-current" />
-          <h3 className="text-2xl font-black">ALL CLEAN!</h3>
-          <p className="font-bold text-gray-700">
-            No cards are currently due for review. Take a break!
-          </p>
-          <button onClick={() => toggleFilter(false)} className="neo-btn bg-accent hover:bg-violet-300 text-sm">
-            REVIEW ALL CARDS ANYWAY
-          </button>
+      ) : queue.length === 0 ? (
+        <div className="card text-center py-12">
+          <CheckCircle size={36} className="mx-auto mb-3 text-[#059669]" />
+          <h2 className="font-bold text-[#0F172A] mb-1">All caught up!</h2>
+          <p className="text-sm text-[#64748B] mb-5">No cards are due right now.</p>
+          <button onClick={() => switchMode(false)} className="btn-secondary cursor-pointer">Review all cards anyway</button>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Flashcard container with flip effects */}
-          <div
-            onClick={() => setIsFlipped(!isFlipped)}
-            className="perspective-1000 w-full min-h-[300px] cursor-pointer group"
-          >
+        <div className="space-y-4">
+          {/* Progress bar */}
+          <div className="h-1.5 bg-[#EFE7FC] rounded-full overflow-hidden">
             <div
-              className={`transform-style-3d transition-transform duration-500 w-full min-h-[260px] sm:min-h-[300px] bg-white neo-border-lg shadow-neo-lg flex flex-col items-center justify-center p-6 sm:p-8 text-center relative ${
-                isFlipped ? "rotate-y-180 bg-yellow-50/20" : ""
-              }`}
-            >
-              {/* Audio Reader Trigger */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  speakText(isFlipped ? currentCard.back : currentCard.front);
-                }}
-                className="absolute top-3 left-3 p-1.5 hover:bg-gray-200 neo-border bg-white"
-                title="Speak Text"
-              >
-                <Volume2 size={16} />
-              </button>
+              className="h-full bg-[#7C3AED] rounded-full transition-all duration-300"
+              style={{ width: `${((idx) / queue.length) * 100}%` }}
+            />
+          </div>
 
-              {/* Due Warning Banner */}
-              <div className="absolute top-3 right-3 text-[10px] font-bold bg-black text-white px-2 py-0.5 neo-border">
-                {isFlipped ? "ANSWER" : "QUESTION"}
+          {/* Card */}
+          <div className="perspective" onClick={flip}>
+            <div className={`preserve-3d transition-transform duration-500 relative min-h-[280px] cursor-pointer ${flipped ? "rotate-y-180" : ""}`}>
+              {/* Front */}
+              <div className="backface-hidden absolute inset-0 card flex flex-col justify-center items-center text-center p-8 !rounded-2xl select-none">
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); speak(queue[idx].front); }}
+                  className="absolute top-4 right-4 p-1.5 text-[#CBD5E1] hover:text-[#7C3AED] hover:bg-[#F7F3FD] rounded-lg transition-colors cursor-pointer"
+                  title="Read aloud"
+                >
+                  <Volume2 size={16} />
+                </button>
+                <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-widest mb-4">Question</span>
+                <p className="text-xl font-semibold text-[#0F172A] leading-snug">{queue[idx].front}</p>
+                <span className="text-xs text-[#CBD5E1] mt-6">Tap to reveal answer</span>
               </div>
 
-              {/* Front side */}
-              <div className={`backface-hidden w-full flex flex-col justify-center items-center absolute p-8 ${
-                isFlipped ? "opacity-0" : "opacity-100"
-              }`}>
-                <h4 className="text-2xl font-extrabold tracking-tight whitespace-pre-wrap leading-snug">
-                  {currentCard.front}
-                </h4>
-                <span className="text-xs font-bold text-gray-400 uppercase mt-8 animate-bounce">
-                  [ Click card to show answer ]
-                </span>
-              </div>
-
-              {/* Back side */}
-              <div className={`backface-hidden rotate-y-180 w-full flex flex-col justify-center items-center absolute p-8 ${
-                isFlipped ? "opacity-100" : "opacity-0"
-              }`}>
-                <p className="text-xl font-bold text-gray-800 whitespace-pre-wrap leading-relaxed">
-                  {currentCard.back}
-                </p>
-                <span className="text-xs font-bold text-gray-400 uppercase mt-8">
-                  [ Click card to view question ]
-                </span>
+              {/* Back */}
+              <div className="backface-hidden rotate-y-180 absolute inset-0 card flex flex-col justify-center items-center text-center p-8 !rounded-2xl !border-[#059669]/30 select-none" style={{ background: "#F0FDF9" }}>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); speak(queue[idx].back); }}
+                  className="absolute top-4 right-4 p-1.5 text-[#CBD5E1] hover:text-[#059669] hover:bg-white rounded-lg transition-colors cursor-pointer"
+                  title="Read aloud"
+                >
+                  <Volume2 size={16} />
+                </button>
+                <span className="text-[10px] font-bold text-[#059669] uppercase tracking-widest mb-4">Answer</span>
+                <p className="text-lg text-[#0F172A] leading-relaxed">{queue[idx].back}</p>
               </div>
             </div>
           </div>
 
-          {/* Controller buttons */}
-          <div className="bg-white neo-card shadow-neo p-4">
-            {!isFlipped ? (
-              <button
-                onClick={() => setIsFlipped(true)}
-                className="w-full neo-btn-primary py-3 text-lg font-black"
-              >
-                REVEAL ANSWER SPACE ↵
+          {/* Controls */}
+          <div className="card !p-4">
+            {!flipped ? (
+              <button onClick={flip} className="btn-primary w-full justify-center cursor-pointer">
+                Reveal answer
               </button>
             ) : (
-              <div>
-                <span className="block text-center font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">
-                  How well did you recall this card?
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <button
-                    onClick={() => handleScoreCard(0)}
-                    className="neo-border py-2 px-3 bg-secondary text-white font-bold hover:bg-red-500 text-xs active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                    style={{ boxShadow: "3px 3px 0px #000" }}
-                  >
-                    AGAIN (0)
-                  </button>
-                  <button
-                    onClick={() => handleScoreCard(2)}
-                    className="neo-border py-2 px-3 bg-orange-400 font-bold hover:bg-orange-500 text-xs active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                    style={{ boxShadow: "3px 3px 0px #000" }}
-                  >
-                    HARD (2)
-                  </button>
-                  <button
-                    onClick={() => handleScoreCard(3)}
-                    className="neo-border py-2 px-3 bg-accent font-bold hover:bg-violet-400 text-xs active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                    style={{ boxShadow: "3px 3px 0px #000" }}
-                  >
-                    GOOD (3)
-                  </button>
-                  <button
-                    onClick={() => handleScoreCard(5)}
-                    className="neo-border py-2 px-3 bg-success font-bold hover:bg-green-400 text-xs active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                    style={{ boxShadow: "3px 3px 0px #000" }}
-                  >
-                    EASY (5)
-                  </button>
+              <div className="animate-fade-in">
+                <p className="text-xs text-center text-[#94A3B8] mb-3 font-medium">How well did you know this?</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { s: 0, label: "Again", color: "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" },
+                    { s: 2, label: "Hard",  color: "bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100" },
+                    { s: 3, label: "Good",  color: "bg-[#F7F3FD] text-[#7C3AED] border border-[#EFE7FC] hover:bg-[#EFE7FC]" },
+                    { s: 5, label: "Easy",  color: "bg-[#F0FDF9] text-[#059669] border border-green-200 hover:bg-green-100" },
+                  ].map(({ s, label, color }) => (
+                    <button
+                      key={s}
+                      onClick={() => score(s)}
+                      className={`py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${color}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -341,4 +237,4 @@ export const StudyMode: React.FC<StudyModeProps> = ({ deckId, onBack }) => {
       )}
     </div>
   );
-};
+}

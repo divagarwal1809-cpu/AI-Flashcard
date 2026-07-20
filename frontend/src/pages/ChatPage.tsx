@@ -85,97 +85,82 @@ export const ChatPage: React.FC<ChatPageProps> = ({ deckId, onBack }) => {
   };
 
   if (loading) {
-    return <div className="text-center py-12 font-bold text-lg">OPENING CHAT...</div>;
+    return <div className="text-center py-12 text-sm text-[#64748B]">Opening study chat...</div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pb-12">
+    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-120px)] min-h-[500px]">
       {/* Back button */}
-      <button
-        onClick={onBack}
-        className="neo-btn bg-white hover:bg-gray-100 flex items-center gap-1.5 py-1 px-3 text-xs mb-6"
-      >
-        <ArrowLeft size={14} /> BACK TO DECK
+      <button onClick={onBack} className="btn-ghost mb-4 self-start cursor-pointer">
+        <ArrowLeft size={16} /> Back to deck
       </button>
 
-      {/* Chat Box */}
-      <div className="bg-white neo-card shadow-neo flex flex-col h-[550px] relative overflow-hidden">
+      {/* Chat Container */}
+      <div className="card flex-1 flex flex-col overflow-hidden !p-0">
         {/* Header */}
-        <div className="bg-primary text-ink p-4 border-b-3 border-black flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2">
-            <Sparkles size={20} className="fill-current" />
+        <div className="border-b border-[#EFE7FC] p-4 flex items-center justify-between bg-[#F7F3FD]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#7C3AED] flex items-center justify-center">
+              <Sparkles size={16} className="text-white" />
+            </div>
             <div>
-              <h3 className="font-black text-sm uppercase leading-none">
-                AI STUDY COMPANION
-              </h3>
-              <span className="text-xs font-bold text-gray-800">
-                Deck: {deck?.name}
-              </span>
+              <h3 className="font-bold text-sm text-[#0F172A]">AI Tutor</h3>
+              <p className="text-xs text-[#64748B]">Deck: <span className="font-semibold text-[#7C3AED]">{deck?.name}</span></p>
             </div>
           </div>
-          <div className="bg-white text-ink text-xs font-extrabold px-2.5 py-1 neo-border">
-            GEMINI 1.5 ACTIVE
-          </div>
+          <span className="badge bg-white text-[#7C3AED] border border-[#EFE7FC] text-[10px]">Gemini 1.5 Active</span>
         </div>
 
         {/* Message Log */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-cream/30">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
           {messages.map((msg, index) => {
             const isUser = msg.role === "user";
             return (
-              <div
-                key={index}
-                className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[80%] p-3.5 neo-border text-sm font-semibold leading-relaxed shadow-neo-sm ${
-                    isUser
-                      ? "bg-accent text-ink"
-                      : "bg-white text-ink"
-                  }`}
-                >
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">
-                    {isUser ? "YOU" : "FLASHMIND AI"}
+              <div key={index} className={`flex ${isUser ? "justify-end" : "justify-start"} animate-fade-up`}>
+                <div className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed ${
+                  isUser 
+                    ? "bg-[#7C3AED] text-white rounded-tr-none" 
+                    : "bg-white border border-[#EFE7FC] text-[#0F172A] rounded-tl-none shadow-sm"
+                }`}>
+                  <span className={`text-[10px] font-bold block mb-1 uppercase tracking-wider ${
+                    isUser ? "text-purple-200" : "text-[#7C3AED]"
+                  }`}>
+                    {isUser ? "You" : "AI Tutor"}
                   </span>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div className="whitespace-pre-wrap font-medium">{msg.content}</div>
                 </div>
               </div>
             );
           })}
           {sending && (
             <div className="flex justify-start">
-              <div className="bg-white p-3.5 neo-border text-sm font-bold text-gray-500 flex items-center gap-2 shadow-neo-sm animate-pulse">
-                <div className="w-2.5 h-2.5 bg-black rounded-full animate-bounce"></div>
-                <div className="w-2.5 h-2.5 bg-black rounded-full animate-bounce delay-100"></div>
-                <div className="w-2.5 h-2.5 bg-black rounded-full animate-bounce delay-200"></div>
-                <span>THINKING...</span>
+              <div className="bg-white border border-[#EFE7FC] p-3.5 rounded-2xl rounded-tl-none text-xs text-[#64748B] flex items-center gap-2 shadow-sm animate-pulse">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 bg-[#7C3AED] rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-[#7C3AED] rounded-full animate-bounce delay-75"></div>
+                  <div className="w-1.5 h-1.5 bg-[#7C3AED] rounded-full animate-bounce delay-150"></div>
+                </div>
+                <span>Tutor is thinking...</span>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Form Input */}
-        <form
-          onSubmit={handleSend}
-          className="p-3 border-t-3 border-black bg-white flex gap-2 shrink-0"
-        >
+        {/* Input Form */}
+        <form onSubmit={handleSend} className="p-3 border-t border-[#EFE7FC] flex gap-2 bg-white">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about this deck, or request a quiz..."
-            className="flex-1 neo-input text-sm"
+            placeholder="Ask a question or request a quiz..."
+            className="input flex-1"
             disabled={sending}
             required
           />
-          <button
-            type="submit"
-            disabled={sending}
-            className="neo-btn-primary py-2 px-4 flex items-center justify-center gap-1.5 disabled:opacity-50"
-          >
+          <button type="submit" disabled={sending} className="btn-primary cursor-pointer">
             <Send size={14} />
-            <span>SEND</span>
+            <span className="hidden sm:inline">Send</span>
           </button>
         </form>
       </div>
